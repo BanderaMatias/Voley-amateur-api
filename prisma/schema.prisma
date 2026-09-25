@@ -1,0 +1,269 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+model User {
+  id String @id @default(cuid())
+  googleSub String @unique
+  email String
+  name String
+  avatar String?
+  admin Boolean @default(false)
+  suspended Boolean @default(false)
+  replacementPreferences Json @default("{}")
+  calendarTokenHash String? @unique
+  series MatchSeries[]
+  blocksMade UserBlock[] @relation("blocker")
+  blocksReceived UserBlock[] @relation("blocked")
+  reportsMade UserReport[] @relation("reporter")
+  reportsReceived UserReport[] @relation("reported")
+  replacementApplications ReplacementApplication[]
+  linkedGuests MatchGuest[]
+  profile Json @default("{}")
+  recruitmentAlerts Boolean @default(true)
+  createdAt DateTime @default(now())
+  sessions Session[]
+  memberships TeamMember[]
+  organized Match[]
+  participants MatchParticipant[]
+  applications RecruitmentApplication[]
+  notifications Notification[]
+  givenRatings PlayerRating[] @relation("author")
+  receivedRatings PlayerRating[] @relation("target")
+}
+model Session {
+  id String @id
+  userId String
+  expiresAt DateTime
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([expiresAt])
+}
+model Team {
+  id String @id @default(cuid())
+  name String
+  description String @default("")
+  zone String @default("")
+  members TeamMember[]
+  registrations TournamentRegistration[]
+  matches Match[]
+  recruitments RecruitmentPost[]
+  createdAt DateTime @default(now())
+}
+model TeamMember {
+  teamId String
+  userId String
+  role String @default("PLAYER")
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([teamId, userId])
+  @@index([userId])
+}
+model Tournament {
+  id String @id @default(cuid())
+  name String
+  season String
+  provider String @default("MANUAL")
+  registrations TournamentRegistration[]
+  matches Match[]
+}
+model TournamentRegistration {
+  id String @id @default(cuid())
+  teamId String
+  tournamentId String
+  externalName String?
+  division String @default("")
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  @@unique([teamId, tournamentId])
+  @@unique([tournamentId, externalName, division])
+}
+model Match {
+  id String @id @default(cuid())
+  title String
+  startsAt DateTime
+  address String
+  courtCode String?
+  priceCents Int?
+  capacity Int @default(12)
+  durationMinutes Int @default(90)
+  paymentAlias String @default("")
+  results Json?
+  balancedTeams Json?
+  updatedAt DateTime @default(now()) @updatedAt
+  revision Int @default(0)
+  seriesId String?
+  seriesIndex Int?
+  series MatchSeries? @relation(fields: [seriesId], references: [id])
+  guests MatchGuest[]
+  payments MatchPayment[]
+  replacement ReplacementRequest?
+  changes MatchChange[]
+  @@unique([seriesId, seriesIndex])
+  type String @default("RECREATIONAL")
+  visibility String @default("PRIVATE")
+  status String @default("OPEN")
+  source String @default("MANUAL")
+  opponent String?
+  externalKey String? @unique
+  organizerId String
+  teamId String?
+  tournamentId String?
+  closedCost Json?
+  organizer User @relation(fields: [organizerId], references: [id])
+  team Team? @relation(fields: [teamId], references: [id])
+  tournament Tournament? @relation(fields: [tournamentId], references: [id])
+  participants MatchParticipant[]
+  createdAt DateTime @default(now())
+  @@index([startsAt, visibility])
+}
+model MatchParticipant {
+  matchId String
+  userId String
+  status String @default("INVITED")
+  attended Boolean @default(false)
+  joinedAt DateTime @default(now())
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([matchId, userId])
+  @@index([userId])
+}
+model RecruitmentPost {
+  id String @id @default(cuid())
+  teamId String
+  title String
+  description String
+  position String
+  level String
+  status String @default("OPEN")
+  createdAt DateTime @default(now())
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  applications RecruitmentApplication[]
+}
+model RecruitmentApplication {
+  postId String
+  userId String
+  status String @default("PENDING")
+  post RecruitmentPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([postId, userId])
+}
+model PlayerRating {
+  authorId String
+  targetId String
+  attack Int
+  reception Int
+  defense Int
+  jump Int
+  updatedAt DateTime @updatedAt
+  author User @relation("author", fields: [authorId], references: [id], onDelete: Cascade)
+  target User @relation("target", fields: [targetId], references: [id], onDelete: Cascade)
+  @@id([authorId, targetId])
+}
+model Notification {
+  id String @id @default(cuid())
+  userId String
+  message String
+  dedupKey String? @unique
+  link String
+  read Boolean @default(false)
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
+}
+model ImportExecution {
+  id String @id @default(cuid())
+  hash String @unique
+  url String
+  pdf Bytes
+  rawText String
+  candidates Json
+  status String @default("REVIEW_REQUIRED")
+  message String @default("")
+  createdAt DateTime @default(now())
+}
+
+model MatchSeries {
+  id String @id @default(cuid())
+  organizerId String
+  organizer User @relation(fields: [organizerId], references: [id])
+  createdAt DateTime @default(now())
+  active Boolean @default(true)
+  matches Match[]
+}
+model MatchGuest {
+  id String @id @default(cuid())
+  matchId String
+  name String
+  position String @default("")
+  level Int @default(3)
+  active Boolean @default(true)
+  attended Boolean @default(false)
+  claimUserId String?
+  linkedUserId String?
+  linkedUser User? @relation(fields: [linkedUserId], references: [id])
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  @@index([matchId])
+}
+model MatchPayment {
+  matchId String
+  payerKey String
+  amountCents Int
+  status String @default("PENDING")
+  note String @default("")
+  updatedAt DateTime @updatedAt
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  @@id([matchId, payerKey])
+}
+model ReplacementRequest {
+  id String @id @default(cuid())
+  matchId String @unique
+  zone String
+  position String
+  description String
+  status String @default("OPEN")
+  createdAt DateTime @default(now())
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  applications ReplacementApplication[]
+}
+model ReplacementApplication {
+  requestId String
+  userId String
+  status String @default("PENDING")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  request ReplacementRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  @@id([requestId, userId])
+}
+model UserBlock {
+  blockerId String
+  blockedId String
+  blocker User @relation("blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@id([blockerId, blockedId])
+}
+model UserReport {
+  id String @id @default(cuid())
+  reporterId String
+  reportedId String
+  reporter User @relation("reporter", fields: [reporterId], references: [id])
+  reported User @relation("reported", fields: [reportedId], references: [id])
+  kind String @default("USER")
+  reason String
+  status String @default("PENDING")
+  resolution String?
+  resolvedBy String?
+  resolvedAt DateTime?
+  createdAt DateTime @default(now())
+}
+model MatchChange {
+  id String @id @default(cuid())
+  matchId String
+  source String
+  before Json
+  after Json
+  createdAt DateTime @default(now())
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+}
